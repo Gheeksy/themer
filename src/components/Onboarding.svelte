@@ -85,15 +85,15 @@
             //connect to JSON bin and create the bin
             let req = new XMLHttpRequest();
 
+            const selectedStorage = $binURL.includes('https://api.github.com/') ? 'Gist' : 'JSONBin';
+
             //waits for the request
             req.onreadystatechange = () => {
                 if (req.readyState == XMLHttpRequest.DONE && req.status === 200) {
 
                     let responseData = JSON.parse(req.responseText);
 
-                    //get the data about the new bin
-                    let binId = responseData.metadata.id;
-                    $binURL = $baseURL + binId;
+                    $binURL = selectedStorage === 'JSONBin' ? $baseURL + responseData.metadata.id : responseData.url;
 
                     //send the data to figma to save to client storage + success msg
                     parent.postMessage({ pluginMessage: { 'type': 'saveCredentials', 'apiKey': $apiKey, 'binURL': $binURL} }, '*');
@@ -111,7 +111,7 @@
                 } else if (req.status >= 400) {
 
                     //send error message to user
-                    parent.postMessage({ pluginMessage: { 'type': 'notify', 'message': 'Connection to JSONBin failed. Double check your API key.'} }, '*');
+                    parent.postMessage({ pluginMessage: { 'type': 'notify', 'message': `Connection to ${selectedStorage} failed. Double check your API key.`} }, '*');
 
                     //turn off the loading state with brief delay
                     setTimeout(() => {
@@ -120,12 +120,31 @@
                 }
             };
 
-            //make the request to JSON bin to create a bin to store theme data
-            req.open('POST', 'https://api.jsonbin.io/v3/b', true);
-            req.setRequestHeader('Content-Type', 'application/json');
-            req.setRequestHeader('X-Master-Key', $apiKey);
-            req.setRequestHeader('X-Bin-Name', 'Themer Figma Plugin');
-            req.send(data);
+            //make the request to JSONBin or Github Gist to create a bin to store theme data
+            if (selectedStorage === 'Gist') {
+                data = {
+                    description: 'Themer data',
+                    'public': false,
+                    files: {
+                        'Themer Figma Plugin': {
+                            content: '[{}]'
+                        }
+                    }
+                }
+                req.open('POST', ' https://api.github.com/gists', true);
+                req.setRequestHeader('Accept', 'application/vnd.github+json');
+                req.setRequestHeader('Content-Type', 'application/json');
+                req.setRequestHeader('Authorization', 'Bearer ' + $apiKey);
+                req.send(JSON.stringify(data));
+            } else {
+                if (selectedStorage === 'JSONBin') {
+                    req.open('POST', 'https://api.jsonbin.io/v3/b', true);
+                    req.setRequestHeader('Content-Type', 'application/json');
+                    req.setRequestHeader('X-Master-Key', $apiKey);
+                    req.setRequestHeader('X-Bin-Name', 'Themer Figma Plugin');
+                    req.send(data);
+                }
+            }
         }
 
     }

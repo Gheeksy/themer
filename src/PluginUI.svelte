@@ -49,10 +49,14 @@
 					req.onreadystatechange = () => {
 
 						//if the request is successful (1)
-						if (req.readyState == XMLHttpRequest.DONE && req.status === 200) {
+						if (req.readyState == XMLHttpRequest.DONE && [200, 201].includes(req.status)) {
 
 							let responseData = JSON.parse(req.responseText);
-							$themeData = responseData.record;
+							if ($binURL.includes('https://api.github.com/')) {
+		                        $themeData = responseData.files['Themer Figma Plugin'].content;
+							} else {
+								$themeData = responseData.record;
+							}
 
 							console.log('right after get', $themeData);
 
@@ -77,9 +81,15 @@
 						}
 					};
 
-					req.open('GET', $binURL + '/latest', true);
-					req.setRequestHeader('X-Master-Key', $apiKey);
-					req.send();
+					if ($binURL.includes('https://api.github.com/')) {
+						req.open('GET', $binURL, true);
+						req.setRequestHeader('Authorization', `Bearer ${$apiKey}`);
+						req.send();
+					} else {
+						req.open('GET', $binURL + '/latest', true);
+						req.setRequestHeader('X-Master-Key', $apiKey);
+						req.send();
+					}
 					
 				}
 

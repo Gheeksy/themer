@@ -60,8 +60,9 @@ figma.showUI(__html__, {themeColors: true, width: 240, height: 312 });
 		if (apiURL && apiSecret) {
 
 			//migration to new urls with jsonbin v3
-			if (!apiURL.includes('https://api.jsonbin.io/v3/b')) {
-
+			if (!apiURL.includes('https://api.jsonbin.io/v3/b') &&
+          !apiURL.includes("https://api.github.com/")
+      ) {
 				console.log('before:', apiURL);
 			
 				apiURL = apiURL.replace("https://api.jsonbin.io/b","https://api.jsonbin.io/v3/b");

@@ -291,7 +291,7 @@
         //remove the empty object if there is no existing data
         //this is because we need to have at least one object in the array
         //for the array to be valid json @ jsonBin
-        if (JSON.stringify($themeData) === '[{}]') {
+        if (JSON.stringify($themeData) && $themeData === '[{}]') {
             combinedThemeData = [];
         }
 
@@ -342,6 +342,8 @@
             //next we send this brand new array to jsonBin
             let req = new XMLHttpRequest();
 
+            const selectedStorage = $binURL.includes('https://api.github.com/') ? 'Gist' : 'JSONBin';
+
             req.onreadystatechange = () => {
 
                 //if the request is successful
@@ -349,7 +351,12 @@
 
                     //parse the respond data as a JSON array, update them $themeDate
                     let responseData = JSON.parse(req.responseText);
-                    $themeData = responseData.record;
+
+                    if (selectedStorage === 'Gist') {
+                        $themeData = responseData.files['Themer Figma Plugin'].content;
+                    } else {
+                        $themeData = responseData.record;
+                    }
                     $reOrdered = false;
 
                     //reset create theme UI for the next time
@@ -404,11 +411,27 @@
                 }
             };
 
-            req.open('PUT', $binURL, true);
-            req.setRequestHeader("Content-Type", "application/json");
-            req.setRequestHeader('X-Master-Key', $apiKey);
-            req.setRequestHeader('X-Bin-Versioning', false);
-            req.send(cleanData);
+            if (selectedStorage === 'Gist') {
+                const data = {
+                    description: 'Themer data',
+                    'public': false,
+                    files: {
+                        'Themer Figma Plugin': {
+                            content: cleanData
+                        }
+                    }
+                }
+                req.open('PATCH', $binURL, true);
+                req.setRequestHeader("Content-Type", "application/vnd.github+jso");
+                req.setRequestHeader('Authorization', `Bearer ${$apiKey}`);
+                req.send(JSON.stringify(data));
+            } else {
+                req.open('PUT', $binURL, true);
+                req.setRequestHeader("Content-Type", "application/json");
+                req.setRequestHeader('X-Master-Key', $apiKey);
+                req.setRequestHeader('X-Bin-Versioning', false);
+                req.send(cleanData);
+            }
 
         } else {
             //tell the user there was an error

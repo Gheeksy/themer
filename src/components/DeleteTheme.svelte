@@ -35,6 +35,8 @@
         //next we send this brand new array to jsonBin
         let req = new XMLHttpRequest();
 
+        const selectedStorage = $binURL.includes('https://api.github.com/') ? 'Gist' : 'JSONBin';
+
         req.onreadystatechange = () => {
 
             //if the request is successful
@@ -42,8 +44,13 @@
 
                 //parse the respond data as a JSON array, update them $themeDate
                 let responseData = JSON.parse(req.responseText);
-                $themeData = responseData.record;
+
                 $reOrdered = false;
+                if (selectedStorage === 'Gist') {
+                    $themeData = responseData.files['Themer Figma Plugin'].content
+                } else {
+                    $themeData = responseData.record;
+                }
             
             } else if (req.status >= 400) { //if unsuccessful
 
@@ -58,11 +65,26 @@
             }
         };
 
-        req.open('PUT', $binURL, true);
-        req.setRequestHeader("Content-Type", "application/json");
-        req.setRequestHeader('X-Master-Key', $apiKey);
-        req.setRequestHeader('X-Bin-Versioning', false);
-        req.send(updatedArray);
+        if (selectedStorage === 'Gist') {
+            const data = {
+                    description: 'Themer data',
+                    files: {
+                        'Themer Figma Plugin': {
+                            content: updatedArray
+                        }
+                    }
+                }
+            req.open('PATCH', $binURL, true);
+            req.setRequestHeader("Accept", "application/vnd.github+json");
+            req.setRequestHeader('Authorization', 'Bearer ' + $apiKey);
+            req.send(JSON.stringify(data));
+        } else {
+            req.open('PUT', $binURL, true);
+            req.setRequestHeader("Content-Type", "application/json");
+            req.setRequestHeader('X-Master-Key', $apiKey);
+            req.setRequestHeader('X-Bin-Versioning', false);
+            req.send(updatedArray);
+        }
 
         //reset the theme to delete, and ui state
         $themeToDelete = '';
