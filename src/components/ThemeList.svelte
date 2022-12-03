@@ -18,8 +18,9 @@
 
     //handle changes to the theme data
     function themeDataChange() {
-
-        if (JSON.stringify($themeData) != '[{}]') {
+       
+        if ($themeData && JSON.stringify($themeData) != '[{}]' && $themeData !== '[{}]') {
+            if (typeof $themeData === 'string') $themeData = JSON.parse($themeData);
 
             //only do this if the list has not be re-ordered
             //if the themes variable get repopulated it causes a weird glitch with svelte-dnd

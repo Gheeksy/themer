@@ -2,7 +2,7 @@
 
 	//import Global CSS from the svelte boilerplate
 	//contains Figma color vars, spacing vars, utility classes and more
-    import { GlobalCSS, Input, Label, IconKey, IconHyperlink, Button, IconButton } from 'figma-plugin-ds-svelte';
+    import { GlobalCSS, Input, Label, IconKey, IconHyperlink, Button, IconButton, Radio } from 'figma-plugin-ds-svelte';
     import { loading, winWidth, apiKey, binURL, mainSection, baseURL, themeData, tutorialURL } from '../scripts/stores.js';
     import HeaderGraphic from '../assets/header.svg';
     import IconHelp from '../assets/help.svg';
@@ -12,6 +12,7 @@
     export { className as class };
 
     let buttonDisabled = true;
+    let selectedStorage = 'JSONBin';
 
     //function to reset Themer
     //this function needs to reset values of key variables
@@ -44,17 +45,22 @@
 
             //waits for the request
             req.onreadystatechange = () => {
-                if (req.readyState == XMLHttpRequest.DONE && req.status === 200) {
+                if (req.readyState == XMLHttpRequest.DONE && [200, 201].includes(req.status)) {
 
                     let responseData = JSON.parse(req.responseText);
 
-                    //get the data about the new bin
-                    let binId = responseData.metadata.id;
-                    $binURL = $baseURL + binId;
-                    $themeData = responseData.record;
+                    if (selectedStorage === 'JSONBin') {
+                        //get the data about the new bin
+                        let binId = responseData.metadata.id;
+                        $binURL = $baseURL + binId;
+                        $themeData = responseData.record;
+                    } else if (selectedStorage === 'Gist') {
+                        $binURL = responseData.url;
+                        $themeData = responseData.files['Themer Figma Plugin'].content;
+                    }
 
                     //send the data to figma to save to client storage + success msg
-                    parent.postMessage({ pluginMessage: { 'type': 'saveCredentials', 'apiKey': $apiKey, 'binURL': $binURL} }, '*');
+                    parent.postMessage({ pluginMessage: { 'type': 'saveCredentials', 'apiKey': $apiKey, 'binURL': $binURL, 'storage': selectedStorage} }, '*');
 
                     //turn off the loading state with brief delay
                     setTimeout(() => {
@@ -70,7 +76,7 @@
                 } else if (req.status >= 400) {
 
                     //send error message to user
-                    parent.postMessage({ pluginMessage: { 'type': 'notify', 'message': 'Connection to JSONBin failed. Double check your API key.'} }, '*');
+                    parent.postMessage({ pluginMessage: { 'type': 'notify', 'message': `Connection to ${selectedStorage} failed. Double check your API key.`} }, '*');
 
                     //turn off the loading state with brief delay
                     setTimeout(() => {
@@ -79,16 +85,35 @@
                 }
             };
 
-            //make the request to JSON bin to create a bin to store theme data
-            req.open('POST', 'https://api.jsonbin.io/v3/b', true);
-            req.setRequestHeader('Content-Type', 'application/json');
-            req.setRequestHeader('X-Master-Key', $apiKey);
-            req.setRequestHeader('X-Bin-Name', 'Themer Figma Plugin');
-            req.send(data);
+            //make the request to JSONBin or Github Gist to create a bin to store theme data
+            if (selectedStorage === 'JSONBin') {
+                req.open('POST', 'https://api.jsonbin.io/v3/b', true);
+                req.setRequestHeader('Content-Type', 'application/json');
+                req.setRequestHeader('X-Master-Key', $apiKey);
+                req.setRequestHeader('X-Bin-Name', 'Themer Figma Plugin');
+                req.send(data);
+            }
+
+            if (selectedStorage === 'Gist') {
+                data = {
+                    description: 'Themer data',
+                    'public': false,
+                    files: {
+                        'Themer Figma Plugin': {
+                            content: '[{}]'
+                        }
+                    }
+                }
+                req.open('POST', ' https://api.github.com/gists', true);
+                req.setRequestHeader('Accept', 'application/vnd.github+json');
+                req.setRequestHeader('Content-Type', 'application/json');
+                req.setRequestHeader('Authorization', 'Bearer ' + $apiKey);
+                req.send(JSON.stringify(data));
+            }
 
         //binurl is present, make sure its a json bin url
         //this could probably be more sophisticated but I am an idiot
-        } else if (!$binURL.includes('https://api.jsonbin.io/')) { 
+        } else if (!$binURL.includes('https://api.jsonbin.io/') && !$binURL.includes('https://gist.github.com/')) { 
             
             //send a message to the user with error state
             parent.postMessage({ pluginMessage: { 'type': 'notify', 'message': 'Invalid bin url.'} }, '*');
@@ -102,7 +127,7 @@
         } else {
 
             //detect if this is an older jsonbin url
-            if (!$binURL.includes('https://api.jsonbin.io/v3/b')) {
+            if (selectedStorage === 'JSONBin' && !$binURL.includes('https://api.jsonbin.io/v3/b')) {
                 $binURL = $binURL.replace('https://api.jsonbin.io/b','https://api.jsonbin.io/v3/b');
 
                 console.log('new bin url: ', $binURL);
@@ -117,7 +142,12 @@
                 if (req.readyState == XMLHttpRequest.DONE && req.status === 200) {
 
                     let responseData = JSON.parse(req.responseText);
-                    $themeData = responseData.record;
+
+                    if (selectedStorage === 'Gist') {
+                        $themeData = responseData.files['Themer Figma Plugin'].content;
+                    } else {
+                        $themeData = responseData.record;
+                    }
 
                     //send error message to user
                     parent.postMessage({ pluginMessage: { 'type': 'saveCredentials', 'apiKey': $apiKey, 'binURL': $binURL} }, '*');
@@ -138,7 +168,7 @@
                     $mainSection = 'settings';
                     
                     //send error message to user
-                    parent.postMessage({ pluginMessage: { 'type': 'notify', 'message': 'Connection to JSONBin failed. Double check your API key.'} }, '*');
+                    parent.postMessage({ pluginMessage: { 'type': 'notify', 'message': `Connection to ${selectedStorage} failed. Double check your API key.`} }, '*');
 
                     //turn off the loading state with brief delay
                     setTimeout(() => {
@@ -148,10 +178,19 @@
                 }
             };
 
-            req.open('GET', $binURL + '/latest', true);
-            req.setRequestHeader('Content-Type', 'application/json');
-            req.setRequestHeader('X-Master-Key', $apiKey);
-            req.send();
+            if (selectedStorage === 'JSONBin') {
+                req.open('GET', $binURL + '/latest', true);
+                req.setRequestHeader('Content-Type', 'application/json');
+                req.setRequestHeader('X-Master-Key', $apiKey);
+                req.send();
+            }
+
+            if (selectedStorage === 'Gist') {
+                req.open('GET', $binURL, true);
+                req.setRequestHeader('Content-Type', 'application/vnd.github+json');
+                req.setRequestHeader('Authorization', 'Bearer ' + $apiKey);
+                req.send();
+            }
 
         }
         
@@ -175,10 +214,20 @@
     </div>
 
     <div class="flex column flex-grow pt-xsmall pl-xsmall pr-xsmall">
-        <div class="label-offset"><Label>API Key</Label></div>
-        <Input iconName={IconKey} placeholder="API key from JSONBin.com" bind:value={$apiKey} class="mb-xxsmall" borders=true />
+        <div class="flex justify-content-between">
+            <div class="flex">
+                <Radio bind:group={selectedStorage} value="JSONBin">JSONBin</Radio>
+            </div>
+            
+            <div class="flex">
+                <Radio bind:group={selectedStorage} value="Gist">Github Gist</Radio>
+            </div>
+        </div>
 
-        <div class="label-offset"><Label>URL to your JSONBin</Label></div>
+        <div class="label-offset"><Label>API Key</Label></div>
+        <Input iconName={IconKey} placeholder="API key from JSONBin.com or gist.github.com" bind:value={$apiKey} class="mb-xxsmall" borders=true />
+
+        <div class="label-offset"><Label>URL to your JSONBin or Github Gist</Label></div>
         <Input iconName={IconHyperlink} bind:value={$binURL} placeholder="Leave empty to auto-generate" borders=true/>
     </div>
 
